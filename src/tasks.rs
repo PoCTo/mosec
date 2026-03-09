@@ -156,6 +156,7 @@ impl TaskManager {
         self.mime_types.get(endpoint)
     }
 
+    #[fastrace::trace]
     pub(crate) async fn send_task(&self, id: &u32) {
         let stage: usize;
         let route: &Vec<async_channel::Sender<u32>>;
@@ -203,6 +204,7 @@ impl TaskManager {
         }
     }
 
+    #[fastrace::trace]
     pub(crate) async fn submit_task(&self, data: Bytes, key: &str) -> Result<Task, ServiceError> {
         let (id, rx) = self.add_new_task(data, key)?;
         if let Err(err) = time::timeout(self.timeout, rx).await {

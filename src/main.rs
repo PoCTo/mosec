@@ -22,6 +22,7 @@ mod metrics;
 mod protocol;
 mod routes;
 mod tasks;
+mod tracing;
 
 use std::env;
 use std::fs::read_to_string;
@@ -29,8 +30,11 @@ use std::net::SocketAddr;
 
 use axum::Router;
 use axum::routing::{get, post};
+use fastrace::prelude::*;
+use fastrace_axum::{FastraceLayer, TRACEPARENT_HEADER};
 use log::{debug, info};
 use logforth::append;
+use logforth::diagnostic;
 use logforth::record::{Level, LevelFilter};
 use tokio::signal::unix::{SignalKind, signal};
 use tower::ServiceBuilder;
@@ -61,6 +65,7 @@ async fn shutdown_signal() {
                 let task_manager = TaskManager::global();
                 task_manager.shutdown().await;
                 info!("service shutdown complete");
+                fastrace::flush();
                 break;
             },
         }
@@ -96,6 +101,14 @@ async fn run(conf: &Config) {
         }
     }
 
+    router = router.layer(
+        FastraceLayer::default().with_span_context_extractor(|req| {
+            req.headers()
+                .get(TRACEPARENT_HEADER)
+                .and_then(|v| SpanContext::decode_w3c_traceparent(v.to_str().ok()?))
+        }),
+    );
+
     if conf.compression {
         router = router.layer(
             ServiceBuilder::new()
@@ -130,7 +143,9 @@ fn main() {
         logforth::starter_log::builder()
             .dispatch(|d| {
                 d.filter(LevelFilter::MoreSevereEqual(Level::Debug))
+                    .diagnostic(diagnostic::FastraceDiagnostic::default())
                     .append(append::Stderr::default().with_layout(ColoredLayout))
+                    .append(append::FastraceEvent::default())
             })
             .apply();
     } else {
@@ -144,10 +159,14 @@ fn main() {
         logforth::starter_log::builder()
             .dispatch(|d| {
                 d.filter(level_filter)
+                    .diagnostic(diagnostic::FastraceDiagnostic::default())
                     .append(append::Stderr::default().with_layout(JsonLayout))
+                    .append(append::FastraceEvent::default())
             })
             .apply();
     }
+
+    tracing::init_tracing();
 
     debug!(conf:?; "parse service arguments");
     run(&conf);

@@ -34,7 +34,7 @@ const RESPONSE_EMPTY: &[u8] = b"no data provided";
 const RESPONSE_TOO_LARGE: &[u8] = b"request body is too large";
 const RESPONSE_SHUTDOWN: &[u8] = b"gracefully shutting down";
 const DEFAULT_RESPONSE_MIME: &str = "application/json";
-const DEFAULT_MAX_REQUEST_SIZE: usize = 10 * 1024 * 1024; // 10MiB
+const DEFAULT_MAX_REQUEST_SIZE: usize = 100 * 1024 * 1024; // 100MiB
 
 fn build_response(status: StatusCode, content: Bytes) -> Response<Body> {
     Response::builder()
